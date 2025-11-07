@@ -129,7 +129,7 @@ async def generate_scene(camera1: UploadFile = File(...)):
         # ===  處理圖片 ===
         img_data = await camera1.read()
         size_mb = len(img_data) / 1_000_000
-        print(f"📸 原始圖片大小: {size_mb:.2f} MB")
+        print(f" 原始圖片大小: {size_mb:.2f} MB")
 
         img_compressed = compress_image(img_data)
         size_after = len(img_compressed) / 1_000_000
@@ -200,4 +200,5 @@ if __name__ == "__main__":
     import uvicorn
     print(" 啟動 Gemini 單圖伺服器：http://127.0.0.1:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000)
+
 
