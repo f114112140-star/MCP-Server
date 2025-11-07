@@ -6,12 +6,12 @@ import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from PIL import Image
 
-# === 🔧 基本設定 ===
+# ===  基本設定 ===
 API_KEY = "AIzaSyBiIoLvMW_PpNEzUulvjsmEmr6uxBGLOkE"  # ← 改成你的 Gemini API key
 SAVE_PATH = "./scene_layout.json"
 genai.configure(api_key=API_KEY)
 
-# 🚀 關閉冗長 gRPC 日誌
+#  關閉冗長 gRPC 日誌
 os.environ["GRPC_VERBOSITY"] = "NONE"
 os.environ["GLOG_minloglevel"] = "2"
 
@@ -25,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === 🧩 圖片壓縮工具 ===
+# ===  圖片壓縮工具 ===
 def compress_image(data: bytes, max_size=(512, 512)):
     """縮小圖片以避免 Gemini 拒收 (防 503 Illegal metadata)"""
     try:
@@ -35,7 +35,7 @@ def compress_image(data: bytes, max_size=(512, 512)):
         img.save(buf, format="PNG")
         return buf.getvalue()
     except Exception as e:
-        print(f"⚠️ 圖片壓縮失敗: {e}")
+        print(f" 圖片壓縮失敗: {e}")
         return data
 
 # === JSON 工具 ===
@@ -54,7 +54,7 @@ def extract_json_from_text(text: str):
         try:
             return json.loads(fixed)
         except Exception as e:
-            print("⚠️ JSON 解碼失敗:", e)
+            print(" JSON 解碼失敗:", e)
             return {"scene": {"objects": []}}
     return {"scene": {"objects": []}}
 
@@ -87,7 +87,7 @@ def sanitize_json(obj):
     else:
         return obj
 
-# === 🧩 相容版安全設定 ===
+# ===  相容版安全設定 ===
 def get_safe_harm_category(name_candidates):
     """依序嘗試取得 HarmCategory 的有效屬性"""
     for name in name_candidates:
@@ -106,13 +106,13 @@ for cat in [harassment, hate, danger, sexual, violence]:
     if cat is not None:
         safety_settings.append({"category": cat, "threshold": HarmBlockThreshold.BLOCK_NONE})
 
-# === 🧠 Gemini 主邏輯 ===
+# ===  Gemini 主邏輯 ===
 @app.post("/generate")
 async def generate_scene(camera1: UploadFile = File(...)):
     try:
-        print("📩 收到請求，開始 Gemini 單圖分析...")
+        print(" 收到請求，開始 Gemini 單圖分析...")
 
-        # ✅ Prompt（強調圖片安全）
+        #  Prompt（強調圖片安全）
         prompt = (
             "You are analyzing a normal indoor photo of a room (no people, no violence, no sensitive or sexual content). "
             "Identify and list only visible furniture objects: cabinet, chair, computer, and table. "
@@ -126,19 +126,19 @@ async def generate_scene(camera1: UploadFile = File(...)):
 
         contents = [prompt]
 
-        # === 🖼️ 處理圖片 ===
+        # ===  處理圖片 ===
         img_data = await camera1.read()
         size_mb = len(img_data) / 1_000_000
         print(f"📸 原始圖片大小: {size_mb:.2f} MB")
 
         img_compressed = compress_image(img_data)
         size_after = len(img_compressed) / 1_000_000
-        print(f"📉 壓縮後大小: {size_after:.2f} MB")
+        print(f" 壓縮後大小: {size_after:.2f} MB")
 
         contents.append({"mime_type": "image/png", "data": img_compressed})
 
-        # === 🧠 呼叫 Gemini ===
-        print("🚀 呼叫 Gemini API 中... 這步可能花 5~15 秒")
+        # ===  呼叫 Gemini ===
+        print(" 呼叫 Gemini API 中... 這步可能花 5~15 秒")
         model = genai.GenerativeModel(model_name="models/gemini-2.5-flash")
 
         result = model.generate_content(
@@ -152,7 +152,7 @@ async def generate_scene(camera1: UploadFile = File(...)):
             request_options={"timeout": 120.0}
         )
 
-        # === 🧠 安全擷取回覆 ===
+        # ===  安全擷取回覆 ===
         raw_text = ""
         try:
             if hasattr(result, "candidates") and len(result.candidates) > 0:
@@ -160,43 +160,44 @@ async def generate_scene(camera1: UploadFile = File(...)):
                 if cand.finish_reason == 0 and cand.content.parts:
                     raw_text = cand.content.parts[0].text
                 else:
-                    print(f"⚠️ Gemini 結束原因：{cand.finish_reason}（可能被過濾或提前中止）")
+                    print(f" Gemini 結束原因：{cand.finish_reason}（可能被過濾或提前中止）")
             else:
-                print("⚠️ Gemini 沒有候選結果（可能被安全過濾）")
+                print(" Gemini 沒有候選結果（可能被安全過濾）")
         except Exception as e:
-            print(f"⚠️ 解析回覆失敗：{e}")
+            print(f" 解析回覆失敗：{e}")
             raw_text = ""
 
         # 顯示過濾原因（若有）
         if hasattr(result, "prompt_feedback"):
-            print("🧩 Prompt Feedback:", result.prompt_feedback)
+            print(" Prompt Feedback:", result.prompt_feedback)
 
         # 若沒有輸出文字，仍回傳空 JSON
         if not raw_text:
-            print("⚠️ Gemini 沒有回傳文字內容，回傳空場景 JSON")
+            print(" Gemini 沒有回傳文字內容，回傳空場景 JSON")
             return JSONResponse(content={"scene": {"objects": []}})
 
-        print("🧠 Gemini 原始回傳（前300字）:", raw_text[:300])
+        print(" Gemini 原始回傳（前300字）:", raw_text[:300])
 
-        # === 🧹 JSON 清理流程 ===
+        # ===  JSON 清理流程 ===
         data = extract_json_from_text(raw_text)
         data = normalize_json_structure(data)
         data = sanitize_json(data)
 
-        # === 💾 儲存結果 ===
+        # ===  儲存結果 ===
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f"💾 已儲存乾淨 JSON: {SAVE_PATH}")
+        print(f" 已儲存乾淨 JSON: {SAVE_PATH}")
 
         return JSONResponse(content=data)
 
     except Exception as e:
-        print("❌ 發生錯誤：", e)
+        print(" 發生錯誤：", e)
         traceback.print_exc()
         return JSONResponse(content={"scene": {"objects": []}, "error": str(e)})
 
-# === 🚀 啟動伺服器 ===
+# ===  啟動伺服器 ===
 if __name__ == "__main__":
     import uvicorn
-    print("🧠 啟動 Gemini 單圖伺服器：http://127.0.0.1:8000")
+    print(" 啟動 Gemini 單圖伺服器：http://127.0.0.1:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000)
+
